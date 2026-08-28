@@ -93,6 +93,9 @@
     newTask: document.querySelector("[data-ws-new-task]"),
     sideProjectName: document.querySelector("[data-ws-side-project-name]"),
     timeline: document.querySelector("[data-ws-timeline]"),
+    sessionSearch: document.querySelector("[data-ws-session-search]"),
+    sessionProject: document.querySelector("[data-ws-session-project]"),
+    sessionStatus: document.querySelector("[data-ws-session-status]"),
     demo: document.querySelector("[data-ws-demo]"),
     fileHead: document.querySelector("[data-ws-file-head]"),
     contextDiff: document.querySelector("[data-ws-context-diff], .ws-diff"),
@@ -127,6 +130,8 @@
     empty: ["空会话", "ws-state-empty"]
   };
   var openMenu = null; // currently open dropdown element or null
+  var sessionRows = [];
+  var SESSION_STATUS_LABELS = { running: "运行中", done: "已完成", recovered: "待恢复", empty: "空会话" };
 
   // GUI-9 (#412): cache status is a projection of observed events only. A
   // null value means the corresponding layer has not produced telemetry yet;
@@ -1239,6 +1244,45 @@
     return "empty";
   }
 
+  function sessionStatus(s) {
+    var status = String(s && s.status || "").toLowerCase();
+    return SESSION_STATUS_LABELS[status] ? status : deriveTaskState(s);
+  }
+
+  function formatSessionTime(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function refreshSessionProjectFilter() {
+    if (!el.sessionProject) return;
+    var selected = el.sessionProject.value;
+    while (el.sessionProject.options.length > 1) el.sessionProject.remove(1);
+    var projects = [];
+    sessionRows.forEach(function (s) {
+      var project = String(s.project || "").trim();
+      if (project && projects.indexOf(project) === -1) projects.push(project);
+    });
+    projects.sort().forEach(function (project) {
+      var option = document.createElement("option");
+      option.value = project; option.textContent = project;
+      el.sessionProject.appendChild(option);
+    });
+    el.sessionProject.value = projects.indexOf(selected) >= 0 ? selected : "";
+  }
+
+  function filterSessions() {
+    var keyword = String(el.sessionSearch && el.sessionSearch.value || "").trim().toLowerCase();
+    var project = String(el.sessionProject && el.sessionProject.value || "");
+    var status = String(el.sessionStatus && el.sessionStatus.value || "");
+    return sessionRows.filter(function (s) {
+      var haystack = [s.name, s.title, s.failure, s.project].join(" ").toLowerCase();
+      return (!keyword || haystack.indexOf(keyword) !== -1) && (!project || s.project === project) && (!status || sessionStatus(s) === status);
+    });
+  }
+
   function renderTasks(sessions) {
     if (!el.taskList) return;
     while (el.taskList.firstChild) el.taskList.removeChild(el.taskList.firstChild);
@@ -1249,14 +1293,17 @@
       el.taskList.appendChild(err);
       return;
     }
-    if (!sessions.length) {
+    sessionRows = sessions;
+    refreshSessionProjectFilter();
+    var visible = filterSessions();
+    if (!visible.length) {
       var empty = document.createElement("li");
       empty.className = "ws-tasks-note";
-      empty.textContent = "还没有任务：点击上方「新建任务」开始第一个会话。";
+      empty.textContent = sessions.length ? "没有符合筛选条件的会话。" : "还没有任务：点击上方「新建任务」开始第一个会话。";
       el.taskList.appendChild(empty);
       return;
     }
-    sessions.forEach(function (s) {
+    visible.forEach(function (s) {
       var li = document.createElement("li");
       var row = document.createElement("button");
       row.type = "button";
@@ -1271,9 +1318,10 @@
 
       var meta = document.createElement("span");
       meta.className = "ws-task-meta";
-      meta.textContent = s.turns ? s.turns + " 轮" : "";
+      var updated = formatSessionTime(s.updated_at);
+      meta.textContent = (s.turns ? s.turns + " 轮" : "") + (updated ? " · " + updated : "");
 
-      var stateKey = deriveTaskState(s);
+      var stateKey = sessionStatus(s);
       var pill = document.createElement("span");
       pill.className = "ws-state-pill " + TASK_PILLS[stateKey][1];
       pill.textContent = TASK_PILLS[stateKey][0];
@@ -1291,7 +1339,21 @@
         row.title = "切换到该任务（会话内容保留）";
         row.addEventListener("click", function () { switchTask(s); });
       }
+      if (s.failure) row.title += "；恢复提示：" + s.failure;
       el.taskList.appendChild(li);
+    });
+  }
+
+  function initSessionFilters() {
+    [el.sessionSearch, el.sessionProject, el.sessionStatus].forEach(function (control) {
+      if (!control) return;
+      control.addEventListener("input", function () { renderTasks(sessionRows); });
+      control.addEventListener("change", function () { renderTasks(sessionRows); });
+    });
+    document.addEventListener("keydown", function (event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && el.sessionSearch) {
+        event.preventDefault(); el.sessionSearch.focus();
+      }
     });
   }
 
@@ -1424,6 +1486,7 @@
 
   initContextTabs();
   initComposer();
+  initSessionFilters();
   initSelectors();
   connectWorkspaceEvents();
 
