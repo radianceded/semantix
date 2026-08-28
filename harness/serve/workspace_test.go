@@ -57,8 +57,8 @@ func TestServeWorkspaceShellRenders(t *testing.T) {
 		`提出后续修改要求`,                  // composer placeholder
 		`实现高缓存命中率`,                  // demo task title from the GUI-1 mockup
 		`src/cache/prefix_cache.go`, // file tree + diff headers
-		`data-ws-cache-status`,       // GUI-9 cache observability hook
-		`缓存状态：暂无数据`,                // no fabricated cache numbers before telemetry
+		`data-ws-cache-status`,      // GUI-9 cache observability hook
+		`缓存状态：暂无数据`,                 // no fabricated cache numbers before telemetry
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("workspace shell missing %q", want)
@@ -145,7 +145,12 @@ func TestServeWorkspaceSelectorContract(t *testing.T) {
 		`"/resume"`,           // task switching keeps session content server-side
 		`"/new"`,              // creating a task enters a fresh session
 		`"/workspace/events"`, // GUI-4 versioned SSE transport
-		`模型不可用`,               // explicit unavailable-model signal (#405 acceptance)
+		`data-ws-session-search`,
+		`data-ws-session-project`,
+		`data-ws-session-status`,
+		`function filterSessions`,
+		`function initSessionFilters`,
+		`模型不可用`, // explicit unavailable-model signal (#405 acceptance)
 	} {
 		if !strings.Contains(js, want) {
 			t.Errorf("workspace shell.js missing %q", want)
@@ -322,7 +327,7 @@ func TestServeSessionsExposeInFlight(t *testing.T) {
 		if _, ok := row["path"].(string); !ok {
 			t.Errorf("/sessions[%d] missing string path", i)
 		}
-		for key, want := range map[string]string{"in_flight": "bool", "current": "bool", "turns": "number", "title": "string"} {
+		for key, want := range map[string]string{"in_flight": "bool", "current": "bool", "turns": "number", "title": "string", "status": "string", "project": "string", "updated_at": "string", "failure": "string"} {
 			v, ok := row[key]
 			if !ok {
 				continue
